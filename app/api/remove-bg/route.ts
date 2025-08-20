@@ -4,10 +4,17 @@ export const runtime = "nodejs"; // ensure Node runtime (not Edge)
 
 export async function POST(req: NextRequest) {
   try {
-    const { removeBackground } = await import("@imgly/background-removal-node");
+    const cloudRunUrl = (process.env.CLOUD_RUN_URL || process.env.NEXT_PUBLIC_CLOUD_RUN_URL || "").replace(/\/$/, "");
+    if (!cloudRunUrl) {
+      return new Response(JSON.stringify({ error: "CLOUD_RUN_URL not configured" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Read incoming form-data and forward to Cloud Run as multipart/form-data
     const formData = await req.formData();
     const file = formData.get("file");
-
     if (!(file instanceof Blob)) {
       return new Response(JSON.stringify({ error: "Missing 'file' in form-data" }), {
         status: 400,
@@ -15,39 +22,32 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const arrayBuffer = await file.arrayBuffer();
-    const input = new Uint8Array(arrayBuffer);
+    const forward = new FormData();
+    // Preserve filename and type if present
+    const filename = (file as any).name || "upload.png";
+    const type = (file as any).type || "image/png";
+    forward.append("file", file, filename as any);
 
-    // Determine MIME type (prefer client-provided, fallback to magic bytes)
-    const mimeFromClient = (file as any).type as string | undefined;
-    const mime = mimeFromClient || detectMime(input) || 'image/png';
+    const upstream = await fetch(`${cloudRunUrl}/process`, {
+      method: "POST",
+      body: forward as any,
+      // Let fetch set the correct multipart boundary headers
+    });
 
-    // Create a Blob with explicit MIME so the library can detect format
-    const blobInput = new Blob([input], { type: mime });
-
-    // Process with IMG.LY Node library on the server
-    const output: any = await removeBackground(blobInput as any);
-
-    // Normalize to Uint8Array for Response body
-    let body: Uint8Array;
-    if (output instanceof Uint8Array) {
-      body = output;
-    } else if (typeof Buffer !== 'undefined' && Buffer.isBuffer(output)) {
-      body = new Uint8Array(output);
-    } else if (output instanceof ArrayBuffer) {
-      body = new Uint8Array(output);
-    } else if (output && typeof output.arrayBuffer === 'function') {
-      const ab = await output.arrayBuffer();
-      body = new Uint8Array(ab);
-    } else {
-      throw new Error('Unexpected output type from removeBackground');
+    if (!upstream.ok) {
+      const text = await upstream.text().catch(() => "");
+      return new Response(JSON.stringify({ error: "Cloud Run processing failed", status: upstream.status, details: text }), {
+        status: 502,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
-    return new Response(body, {
+    // Stream/return the PNG back to client
+    const arrayBuf = await upstream.arrayBuffer();
+    return new Response(arrayBuf, {
       status: 200,
       headers: {
-        "Content-Type": "image/png",
-        // allow caching of result for some time if desired
+        "Content-Type": upstream.headers.get("content-type") || "image/png",
         "Cache-Control": "public, max-age=31536000, immutable",
       },
     });
@@ -59,26 +59,4 @@ export async function POST(req: NextRequest) {
     });
   }
 }
-
-// Simple MIME detection from magic bytes
-function detectMime(buf: Uint8Array): string | undefined {
-  if (buf.length >= 8) {
-    // PNG: 89 50 4E 47 0D 0A 1A 0A
-    if (
-      buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47 &&
-      buf[4] === 0x0d && buf[5] === 0x0a && buf[6] === 0x1a && buf[7] === 0x0a
-    ) return 'image/png';
-  }
-  if (buf.length >= 3) {
-    // JPEG: FF D8 FF
-    if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
-  }
-  if (buf.length >= 12) {
-    // WebP: RIFF....WEBP
-    if (
-      buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
-      buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50
-    ) return 'image/webp';
-  }
-  return undefined;
-}
+ 
