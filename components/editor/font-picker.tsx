@@ -1,10 +1,10 @@
 'use client'
 
 import React, { useEffect, useState } from 'react';
+
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
 import { CaretSortIcon, CheckIcon } from '@radix-ui/react-icons';
 import { cn } from '@/lib/utils';
 import { ALL_FONTS } from '@/constants/fonts';
@@ -30,8 +30,23 @@ const FontFamilyPicker: React.FC<FontFamilyPickerProps> = ({
     setIsPaidUser(true);
   }, [userId]);
 
+  // no-op
+  useEffect(() => {}, [currentFont]);
+
+  const [open, setOpen] = useState(false);
+  const select = (font: string) => {
+    try {
+      console.log('[FontPicker] selecting font ->', font);
+      handleAttributeChange(attribute, font);
+      setOpen(false);
+    } catch (e) {
+      console.error('[FontPicker] select error', e);
+    }
+  };
+
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
+
       <div className='flex flex-col items-start justify-start my-8'>
         <Label>
           Font Family
@@ -50,38 +65,38 @@ const FontFamilyPicker: React.FC<FontFamilyPickerProps> = ({
           </Button>
         </PopoverTrigger>
       </div>
-      <PopoverContent className="w-full p-0">
-        <Command>
-          <CommandInput
-            placeholder="Search font family..."
-            className="h-9"
-          />
-          <CommandList>
-            <CommandEmpty>No font family found.</CommandEmpty>
-            <CommandGroup heading="All Fonts">
-              {ALL_FONTS.map((font) => (
-                <CommandItem
-                  value={font}
-                  key={font}
-                  onSelect={() => handleAttributeChange(attribute, font)}
-                  className='hover:cursor-pointer'
-                  style={{ fontFamily: font }}
-                >
-                  {font}
-                  <CheckIcon
-                    className={cn(
-                      "ml-auto h-4 w-4",
-                      font === currentFont ? "opacity-100" : "opacity-0"
-                    )}
-                  />
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
+      <PopoverContent align="start" sideOffset={6} className="w-[260px] p-2 z-50 bg-popover border rounded-md shadow-md">
+        <div className="max-h-[300px] overflow-y-auto">
+          <div className="px-2 py-1.5 text-xs text-muted-foreground">All Fonts</div>
+          <div className="flex flex-col">
+            {ALL_FONTS.map((font) => (
+              <button
+                key={font}
+                type="button"
+                className={cn(
+                  "flex w-full items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-accent hover:text-accent-foreground",
+                )}
+                style={{ fontFamily: font }}
+                onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); select(font); }}
+                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); select(font); }}
+                onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); select(font); }}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); select(font); }}
+              >
+                <span className="flex-1">{font}</span>
+                <CheckIcon
+                  className={cn(
+                    "ml-auto h-4 w-4",
+                    font === currentFont ? "opacity-100" : "opacity-0"
+                  )}
+                />
+              </button>
+            ))}
+          </div>
+        </div>
       </PopoverContent>
     </Popover>
   );
+
 }
 
 export default FontFamilyPicker;

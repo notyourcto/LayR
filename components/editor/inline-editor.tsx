@@ -49,6 +49,10 @@ const InlineEditor = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const previewRef = useRef<HTMLDivElement>(null)
+
+  // Track preview render size to match export scaling
+  const [previewSize, setPreviewSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 })
 
   // Image adjustments
   const [rotationDeg, setRotationDeg] = useState<number>(0)
@@ -84,6 +88,19 @@ const InlineEditor = () => {
       clearInterval(timeInterval)
     }
   }, [selectedImage, isImageSetupDone, messages.length])
+
+  // Measure preview area size for accurate export scaling
+  useEffect(() => {
+    const measure = () => {
+      if (previewRef.current) {
+        const rect = previewRef.current.getBoundingClientRect()
+        setPreviewSize({ width: Math.round(rect.width), height: Math.round(rect.height) })
+      }
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [isImageSetupDone, aspectRatio, naturalImageSize])
 
   const resetImageAdjustments = () => {
     setRotationDeg(0)
@@ -195,7 +212,15 @@ const InlineEditor = () => {
     bgImg.onload = () => {
       canvas.width = Math.floor(bgImg.width * exportScale)
       canvas.height = Math.floor(bgImg.height * exportScale)
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
 
+      // Always reset to default state before drawing images
+      ctx.globalCompositeOperation = 'source-over'
+      ctx.globalAlpha = 1
+      ctx.filter = 'none'
+
+      // Multiplier to convert preview CSS px to export canvas px
+      const sizeMultiplier = previewSize.height > 0 ? canvas.height / previewSize.height : 1
       if (rotationDeg !== 0 || brightness !== 1 || contrast !== 1) {
         ctx.save()
         ctx.filter = `brightness(${brightness}) contrast(${contrast})`
@@ -214,7 +239,8 @@ const InlineEditor = () => {
       textSets.filter(set => set.layer === 'behind').forEach((textSet) => {
         ctx.save()
 
-        ctx.font = `${textSet.fontWeight} ${textSet.fontSize * 3 * exportScale}px ${textSet.fontFamily}`
+        const fontPx = Math.max(1, textSet.fontSize * sizeMultiplier)
+        ctx.font = `${textSet.fontWeight} ${fontPx}px ${textSet.fontFamily}`
         ctx.fillStyle = textSet.color
         ctx.globalAlpha = textSet.opacity
 
@@ -260,6 +286,7 @@ const InlineEditor = () => {
 
         ctx.rotate((textSet.rotation * Math.PI) / 180)
 
+        const letterSpacingPx = (textSet.letterSpacing || 0) * sizeMultiplier
         const drawWithLetterSpacing = (draw: (ch: string, x: number) => void) => {
           if (textSet.letterSpacing === 0) {
             draw(textSet.text, 0)
@@ -269,27 +296,27 @@ const InlineEditor = () => {
           let currentX = 0
           const totalWidth = chars.reduce((width, char, i) => {
             const charWidth = ctx.measureText(char).width
-            return width + charWidth + (i < chars.length - 1 ? textSet.letterSpacing : 0)
+            return width + charWidth + (i < chars.length - 1 ? letterSpacingPx : 0)
           }, 0)
           currentX = -totalWidth / 2
           chars.forEach((char) => {
             const charWidth = ctx.measureText(char).width
             draw(char, currentX + charWidth / 2)
-            currentX += charWidth + textSet.letterSpacing
+            currentX += charWidth + letterSpacingPx
           })
         }
 
         if (textSet.shadowSize > 0) {
           ctx.save()
           ctx.shadowColor = textSet.shadowColor
-          ctx.shadowBlur = textSet.shadowSize
+          ctx.shadowBlur = Math.max(0, textSet.shadowSize * sizeMultiplier)
           drawWithLetterSpacing((ch, x) => ctx.fillText(ch, x, 0))
           ctx.restore()
         }
 
         if (textSet.strokeWidth > 0) {
           ctx.save()
-          ctx.lineWidth = textSet.strokeWidth * exportScale
+          ctx.lineWidth = Math.max(1, textSet.strokeWidth * sizeMultiplier)
           ctx.strokeStyle = textSet.strokeColor
           ctx.miterLimit = 2
           drawWithLetterSpacing((ch, x) => ctx.strokeText(ch, x, 0))
@@ -305,13 +332,18 @@ const InlineEditor = () => {
         const removedBgImg = new (window as any).Image()
         removedBgImg.crossOrigin = 'anonymous'
         removedBgImg.onload = () => {
+          // Ensure default state when drawing the foreground object image
+          ctx.globalCompositeOperation = 'source-over'
+          ctx.globalAlpha = 1
+          ctx.filter = 'none'
           ctx.drawImage(removedBgImg, 0, 0, canvas.width, canvas.height)
           
           // Render front layer text after removed background
           textSets.filter(set => set.layer === 'front').forEach((textSet) => {
             ctx.save()
 
-            ctx.font = `${textSet.fontWeight} ${textSet.fontSize * 3 * exportScale}px ${textSet.fontFamily}`
+            const fontPx = Math.max(1, textSet.fontSize * sizeMultiplier)
+            ctx.font = `${textSet.fontWeight} ${fontPx}px ${textSet.fontFamily}`
             ctx.fillStyle = textSet.color
             ctx.globalAlpha = textSet.opacity
 
@@ -357,6 +389,7 @@ const InlineEditor = () => {
 
             ctx.rotate((textSet.rotation * Math.PI) / 180)
 
+            const letterSpacingPx = (textSet.letterSpacing || 0) * sizeMultiplier
             const drawWithLetterSpacing = (draw: (ch: string, x: number) => void) => {
               if (textSet.letterSpacing === 0) {
                 draw(textSet.text, 0)
@@ -366,27 +399,27 @@ const InlineEditor = () => {
               let currentX = 0
               const totalWidth = chars.reduce((width, char, i) => {
                 const charWidth = ctx.measureText(char).width
-                return width + charWidth + (i < chars.length - 1 ? textSet.letterSpacing : 0)
+                return width + charWidth + (i < chars.length - 1 ? letterSpacingPx : 0)
               }, 0)
               currentX = -totalWidth / 2
               chars.forEach((char) => {
                 const charWidth = ctx.measureText(char).width
                 draw(char, currentX + charWidth / 2)
-                currentX += charWidth + textSet.letterSpacing
+                currentX += charWidth + letterSpacingPx
               })
             }
 
             if (textSet.shadowSize > 0) {
               ctx.save()
               ctx.shadowColor = textSet.shadowColor
-              ctx.shadowBlur = textSet.shadowSize
+              ctx.shadowBlur = Math.max(0, textSet.shadowSize * sizeMultiplier)
               drawWithLetterSpacing((ch, x) => ctx.fillText(ch, x, 0))
               ctx.restore()
             }
 
             if (textSet.strokeWidth > 0) {
               ctx.save()
-              ctx.lineWidth = textSet.strokeWidth * exportScale
+              ctx.lineWidth = Math.max(1, textSet.strokeWidth * sizeMultiplier)
               ctx.strokeStyle = textSet.strokeColor
               ctx.miterLimit = 2
               drawWithLetterSpacing((ch, x) => ctx.strokeText(ch, x, 0))
@@ -429,6 +462,7 @@ const InlineEditor = () => {
             </div>
             <div className='min-h-[360px] w-full md:w-[80%] p-4 border border-border rounded-xl bg-white/60 dark:bg-zinc-900/40 backdrop-blur-md shadow-sm'>
               <div
+                ref={previewRef}
                 className='relative w-full overflow-hidden rounded-lg'
                 style={{
                   aspectRatio:

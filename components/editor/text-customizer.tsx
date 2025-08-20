@@ -115,7 +115,10 @@ const TextCustomizer: React.FC<TextCustomizerProps> = ({ textSet, handleAttribut
                             <FontFamilyPicker
                                 attribute="fontFamily"
                                 currentFont={textSet.fontFamily}
-                                handleAttributeChange={(attribute, value) => handleAttributeChange(textSet.id, attribute, value)}
+                                handleAttributeChange={(attribute, value) => {
+                                    console.log('[TextCustomizer][mobile] Font change ->', { id: textSet.id, attribute, value });
+                                    handleAttributeChange(textSet.id, attribute, value)
+                                }}
                                 userId={userId}
                             />
                         )}
@@ -337,7 +340,10 @@ const TextCustomizer: React.FC<TextCustomizerProps> = ({ textSet, handleAttribut
                         <FontFamilyPicker
                             attribute="fontFamily"
                             currentFont={textSet.fontFamily}
-                            handleAttributeChange={(attribute, value) => handleAttributeChange(textSet.id, attribute, value)}
+                            handleAttributeChange={(attribute, value) => {
+                                console.log('[TextCustomizer][desktop] Font change ->', { id: textSet.id, attribute, value });
+                                handleAttributeChange(textSet.id, attribute, value)
+                            }}
                             userId={userId}
                         />
                         <ColorPicker

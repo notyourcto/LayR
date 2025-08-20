@@ -152,6 +152,8 @@ const Page = () => {
             canvas.width = Math.floor(bgImg.width * exportScale);
             canvas.height = Math.floor(bgImg.height * exportScale);
     
+            // Always reset to default compositing before drawing images
+            ctx.globalCompositeOperation = 'source-over'
             if (rotationDeg !== 0 || brightness !== 1 || contrast !== 1) {
                 ctx.save();
                 ctx.filter = `brightness(${brightness}) contrast(${contrast})`;
@@ -275,6 +277,8 @@ const Page = () => {
                 const removedBgImg = new (window as any).Image();
                 removedBgImg.crossOrigin = "anonymous";
                 removedBgImg.onload = () => {
+                    // Ensure default compositing when drawing the foreground object image
+                    ctx.globalCompositeOperation = 'source-over'
                     ctx.drawImage(removedBgImg, 0, 0, canvas.width, canvas.height);
                     
                     // Render front layer text (after removed bg image)
