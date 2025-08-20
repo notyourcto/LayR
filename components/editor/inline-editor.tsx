@@ -315,10 +315,8 @@ const InlineEditor = () => {
           difference: 'difference',
           exclusion: 'exclusion',
         } as any
-        const prevComposite = ctx.globalCompositeOperation
-        ctx.globalCompositeOperation = (blendMap as any)[textSet.blendMode || 'normal'] ?? 'source-over'
-        ctx.drawImage(off, 0, 0)
-        ctx.globalCompositeOperation = prevComposite
+        const mode = (blendMap as any)[textSet.blendMode || 'normal'] ?? 'source-over'
+        compositeWithFallback(ctx, off, mode)
       })
 
       if (removedBgImageUrl) {
@@ -411,10 +409,8 @@ const InlineEditor = () => {
               difference: 'difference',
               exclusion: 'exclusion',
             } as any
-            const prevComposite = ctx.globalCompositeOperation
-            ctx.globalCompositeOperation = (blendMap as any)[textSet.blendMode || 'normal'] ?? 'source-over'
-            ctx.drawImage(off, 0, 0)
-            ctx.globalCompositeOperation = prevComposite
+            const mode = (blendMap as any)[textSet.blendMode || 'normal'] ?? 'source-over'
+            compositeWithFallback(ctx, off, mode)
           })
           
           triggerDownload()
@@ -432,6 +428,56 @@ const InlineEditor = () => {
       link.download = `${APP_NAME.toLowerCase().replace(/\s+/g, '-')}.png`
       link.href = dataUrl
       link.click()
+    }
+  }
+
+  // CPU fallback for blend modes with inconsistent canvas behavior on some mobile browsers
+  const compositeWithFallback = (dstCtx: CanvasRenderingContext2D, src: HTMLCanvasElement, mode: string) => {
+    if (mode !== 'difference' && mode !== 'exclusion') {
+      // Use GPU pipeline for all other modes
+      const prev = dstCtx.globalCompositeOperation
+      dstCtx.globalCompositeOperation = (mode as GlobalCompositeOperation)
+      dstCtx.drawImage(src, 0, 0)
+      dstCtx.globalCompositeOperation = prev
+      return
+    }
+
+    const w = canvasRef.current!.width, h = canvasRef.current!.height
+    try {
+      const dstImg = dstCtx.getImageData(0, 0, w, h)
+      const srcCtx = src.getContext('2d')!
+      const srcImg = srcCtx.getImageData(0, 0, w, h)
+      const d = dstImg.data
+      const s = srcImg.data
+      for (let i = 0; i < d.length; i += 4) {
+        const sr = s[i], sg = s[i+1], sb = s[i+2], sa = s[i+3] // premultiplied
+        if (sa === 0) continue // no source -> keep dest
+        const dr = d[i], dg = d[i+1], db = d[i+2], da = d[i+3]
+        // Approximate blend in premultiplied space for opaque dest
+        let or: number, og: number, ob: number
+        if (mode === 'difference') {
+          or = Math.abs(dr - sr)
+          og = Math.abs(dg - sg)
+          ob = Math.abs(db - sb)
+        } else { // exclusion
+          // exclusion = d + s - 2*d*s (approx in 0..255 premultiplied domain)
+          or = dr + sr - ((2 * dr * sr) / 255)
+          og = dg + sg - ((2 * dg * sg) / 255)
+          ob = db + sb - ((2 * db * sb) / 255)
+        }
+        // Alpha: keep dest alpha (usually opaque background) for stability
+        d[i] = or
+        d[i+1] = og
+        d[i+2] = ob
+        d[i+3] = Math.max(da, sa)
+      }
+      dstCtx.putImageData(dstImg, 0, 0)
+    } catch (e) {
+      // Fallback to GPU path if ImageData not allowed (e.g., tainted canvas)
+      const prev = dstCtx.globalCompositeOperation
+      dstCtx.globalCompositeOperation = (mode as GlobalCompositeOperation)
+      dstCtx.drawImage(src, 0, 0)
+      dstCtx.globalCompositeOperation = prev
     }
   }
 
