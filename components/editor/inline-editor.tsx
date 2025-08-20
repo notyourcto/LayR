@@ -3,7 +3,6 @@
 import React, { useRef, useState, useEffect } from 'react'
 import Image from 'next/image'
 import { PlusIcon, ReloadIcon } from '@radix-ui/react-icons'
-import { removeBackground } from '@imgly/background-removal'
 
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -46,6 +45,9 @@ const InlineEditor = () => {
   const [isDragging, setIsDragging] = useState<boolean>(false)
   const [currentMessage, setCurrentMessage] = useState(0)
   const [timeElapsed, setTimeElapsed] = useState(0)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [processingMode, setProcessingMode] = useState<'local' | 'cloud'>('local')
+  const cloudRunUrl = (typeof window !== 'undefined' ? process.env.NEXT_PUBLIC_CLOUD_RUN_URL : undefined) as string | undefined
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -116,6 +118,7 @@ const InlineEditor = () => {
   const loadImageFile = async (file: File) => {
     const imageUrl = URL.createObjectURL(file)
     setSelectedImage(imageUrl)
+    setSelectedFile(file)
     try {
       const probe = new (window as any).Image()
       probe.onload = () => {
@@ -123,7 +126,7 @@ const InlineEditor = () => {
       }
       probe.src = imageUrl
     } catch {}
-    await setupImage(imageUrl)
+    await setupImage(file)
   }
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -139,13 +142,21 @@ const InlineEditor = () => {
     if (file) await loadImageFile(file)
   }
 
-  const setupImage = async (imageUrl: string) => {
+  const setupImage = async (file: File) => {
     try {
       // Reset states when starting new image processing
       setCurrentMessage(0)
       setTimeElapsed(0)
-      
-      const imageBlob = await removeBackground(imageUrl)
+      // Send file to selected processor (local API or Cloud Run)
+      const form = new FormData()
+      form.append('file', file)
+      const endpoint = processingMode === 'cloud' && cloudRunUrl ? `${cloudRunUrl.replace(/\/$/, '')}/process` : '/api/remove-bg'
+      const res = await fetch(endpoint, { method: 'POST', body: form })
+      if (!res.ok) {
+        const msg = await res.text().catch(() => '')
+        throw new Error(`Server remove-bg failed (${res.status}): ${msg}`)
+      }
+      const imageBlob = await res.blob()
       const url = URL.createObjectURL(imageBlob)
       setRemovedBgImageUrl(url)
       setIsImageSetupDone(true)
@@ -520,7 +531,7 @@ const InlineEditor = () => {
                         <span className="text-lg font-medium">{messages[currentMessage]}</span>
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        This usually takes 40-60 seconds.
+                        This usually takes 5 - 10 seconds.
                       </div>
                       <div className="text-sm text-orange-600">
                         Perfect time to grab a coffee!
@@ -641,6 +652,20 @@ const InlineEditor = () => {
                 </TabsContent>
                 <TabsContent value='settings' className='m-0'>
                   <div className='space-y-3'>
+                    <div className='flex items-center justify-between gap-3'>
+                      <label className='text-sm'>Processing Mode</label>
+                      <select
+                        value={processingMode}
+                        onChange={(e) => setProcessingMode(e.target.value as any)}
+                        className='border rounded px-2 py-1 bg-background'
+                      >
+                        <option value='local'>Local (API Route)</option>
+                        <option value='cloud' disabled={!cloudRunUrl}>Server (Cloud Run)</option>
+                      </select>
+                    </div>
+                    {!cloudRunUrl && processingMode === 'cloud' && (
+                      <div className='text-xs text-amber-600'>Set NEXT_PUBLIC_CLOUD_RUN_URL to enable Cloud Run.</div>
+                    )}
                     <Button className='w-full bg-orange-600 hover:bg-orange-700 text-white' onClick={saveCompositeImage}>Download Image</Button>
                     <div className='text-xs text-muted-foreground'>High quality PNG export</div>
                   </div>

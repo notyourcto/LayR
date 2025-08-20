@@ -81,7 +81,7 @@ const LoadingIndicator: React.FC<LoadingIndicatorProps> = ({ stage = 'processing
           {messages[currentMessage]}
         </p>
         <p className="text-sm text-muted-foreground max-w-sm">
-          Our AI is carefully removing the background from your image. This usually takes 40-60 seconds for the best quality results.
+          Our AI is carefully removing the background from your image. This usually takes 5 - 10 seconds for the best quality results.
         </p>
       </div>
 

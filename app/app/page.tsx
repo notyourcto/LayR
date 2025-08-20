@@ -16,7 +16,6 @@ import LoadingIndicator from '@/components/ui/loading-indicator';
 
 import { PlusIcon, ReloadIcon } from '@radix-ui/react-icons';
 
-import { removeBackground } from "@imgly/background-removal";
 
 import '@/app/fonts.css';
 import { APP_NAME, getAcronym } from '@/constants/branding';
@@ -59,7 +58,7 @@ const Page = () => {
             };
             probe.src = imageUrl;
         } catch {}
-        await setupImage(imageUrl);
+        await setupImage(file);
     }
 
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -75,15 +74,19 @@ const Page = () => {
         if (file) await loadImageFile(file);
     }
 
-    const setupImage = async (imageUrl: string) => {
+    const setupImage = async (file: File) => {
         try {
-            const imageBlob = await removeBackground(imageUrl);
+            const form = new FormData();
+            form.append('file', file);
+            const res = await fetch('/api/remove-bg', { method: 'POST', body: form });
+            if (!res.ok) {
+                const msg = await res.text().catch(() => '');
+                throw new Error(`Server remove-bg failed (${res.status}): ${msg}`);
+            }
+            const imageBlob = await res.blob();
             const url = URL.createObjectURL(imageBlob);
             setRemovedBgImageUrl(url);
             setIsImageSetupDone(true);
-
-            // Skip DB update in local testing
-            
         } catch (error) {
             console.error(error);
         }

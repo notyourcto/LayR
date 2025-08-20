@@ -10,6 +10,23 @@ const nextConfig = {
           ],
     },
 
+    experimental: {
+      // allow server RSC to load native packages
+      serverComponentsExternalPackages: [
+        'onnxruntime-node',
+        '@imgly/background-removal-node',
+      ],
+    },
+
+    webpack: (config, { isServer }) => {
+      if (!isServer) {
+        // don't try to bundle native node binaries into the client
+        config.externals = config.externals || []
+        config.externals.push('onnxruntime-node', '@imgly/background-removal-node')
+      }
+      return config
+    },
+
     async headers() {
       return [
         {
