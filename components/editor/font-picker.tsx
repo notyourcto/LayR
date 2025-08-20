@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -34,6 +34,12 @@ const FontFamilyPicker: React.FC<FontFamilyPickerProps> = ({
   useEffect(() => {}, [currentFont]);
 
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const filteredFonts = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return ALL_FONTS;
+    return ALL_FONTS.filter(f => f.toLowerCase().includes(q));
+  }, [query]);
   const select = (font: string) => {
     try {
       console.log('[FontPicker] selecting font ->', font);
@@ -65,21 +71,26 @@ const FontFamilyPicker: React.FC<FontFamilyPickerProps> = ({
           </Button>
         </PopoverTrigger>
       </div>
-      <PopoverContent align="start" sideOffset={6} className="w-[260px] p-2 z-50 bg-popover border rounded-md shadow-md">
-        <div className="max-h-[300px] overflow-y-auto">
-          <div className="px-2 py-1.5 text-xs text-muted-foreground">All Fonts</div>
+      <PopoverContent align="start" sideOffset={6} className="w-[280px] p-0 z-50 bg-popover border rounded-md shadow-md">
+        <div className="sticky top-0 z-10 p-2 bg-popover border-b">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search font family..."
+            className="w-full h-9 px-2 rounded border bg-background text-sm"
+          />
+        </div>
+        <div className="max-h-[320px] overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' as any }}>
+          <div className="px-3 py-2 text-xs text-muted-foreground">All Fonts</div>
           <div className="flex flex-col">
-            {ALL_FONTS.map((font) => (
+            {filteredFonts.map((font) => (
               <button
                 key={font}
                 type="button"
                 className={cn(
-                  "flex w-full items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-accent hover:text-accent-foreground",
+                  "flex w-full items-center gap-2 px-3 py-2 text-sm rounded hover:bg-accent hover:text-accent-foreground",
                 )}
                 style={{ fontFamily: font }}
-                onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); select(font); }}
-                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); select(font); }}
-                onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); select(font); }}
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); select(font); }}
               >
                 <span className="flex-1">{font}</span>
