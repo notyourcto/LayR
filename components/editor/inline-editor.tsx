@@ -235,47 +235,29 @@ const InlineEditor = () => {
         ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height)
       }
 
-      // Render behind layer text first
+      // Render behind layer text first (using offscreen canvas for CSS-like mix-blend isolation)
       textSets.filter(set => set.layer === 'behind').forEach((textSet) => {
-        ctx.save()
+        const off = document.createElement('canvas')
+        off.width = canvas.width
+        off.height = canvas.height
+        const octx = off.getContext('2d')
+        if (!octx) return
 
         const fontPx = Math.max(1, textSet.fontSize * sizeMultiplier)
-        ctx.font = `${textSet.fontWeight} ${fontPx}px ${textSet.fontFamily}`
-        ctx.fillStyle = textSet.color
-        ctx.globalAlpha = textSet.opacity
+        octx.font = `${textSet.fontWeight} ${fontPx}px ${textSet.fontFamily}`
+        octx.fillStyle = textSet.color
+        octx.globalAlpha = textSet.opacity
+        octx.textAlign = 'center'
+        octx.textBaseline = 'middle'
 
-        const blendMap: Record<string, GlobalCompositeOperation> = {
-          normal: 'source-over',
-          multiply: 'multiply',
-          screen: 'screen',
-          overlay: 'overlay',
-          darken: 'darken',
-          lighten: 'lighten',
-          'color-dodge': 'color-dodge',
-          'color-burn': 'color-burn',
-          'hard-light': 'hard-light',
-          'soft-light': 'soft-light',
-          difference: 'difference',
-          exclusion: 'exclusion',
-          hue: 'hue',
-          saturation: 'saturation',
-          color: 'color',
-          luminosity: 'luminosity',
-        } as any
-        const prevComposite = ctx.globalCompositeOperation
-        ctx.globalCompositeOperation = (blendMap as any)[textSet.blendMode || 'normal'] ?? 'source-over'
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'middle'
+        const x = (off.width * (textSet.left + 50)) / 100
+        const y = (off.height * (50 - textSet.top)) / 100
 
-        const x = (canvas.width * (textSet.left + 50)) / 100
-        const y = (canvas.height * (50 - textSet.top)) / 100
-
-        ctx.translate(x, y)
-
+        octx.save()
+        octx.translate(x, y)
         const tiltXRad = (-textSet.tiltX * Math.PI) / 180
         const tiltYRad = (-textSet.tiltY * Math.PI) / 180
-
-        ctx.transform(
+        octx.transform(
           Math.cos(tiltYRad) * (textSet.scaleX ?? 1),
           Math.sin(0),
           -Math.sin(0),
@@ -283,8 +265,7 @@ const InlineEditor = () => {
           0,
           0
         )
-
-        ctx.rotate((textSet.rotation * Math.PI) / 180)
+        octx.rotate((textSet.rotation * Math.PI) / 180)
 
         const letterSpacingPx = (textSet.letterSpacing || 0) * sizeMultiplier
         const drawWithLetterSpacing = (draw: (ch: string, x: number) => void) => {
@@ -295,36 +276,48 @@ const InlineEditor = () => {
           const chars = textSet.text.split('')
           let currentX = 0
           const totalWidth = chars.reduce((width, char, i) => {
-            const charWidth = ctx.measureText(char).width
+            const charWidth = octx.measureText(char).width
             return width + charWidth + (i < chars.length - 1 ? letterSpacingPx : 0)
           }, 0)
           currentX = -totalWidth / 2
           chars.forEach((char) => {
-            const charWidth = ctx.measureText(char).width
+            const charWidth = octx.measureText(char).width
             draw(char, currentX + charWidth / 2)
             currentX += charWidth + letterSpacingPx
           })
         }
 
         if (textSet.shadowSize > 0) {
-          ctx.save()
-          ctx.shadowColor = textSet.shadowColor
-          ctx.shadowBlur = Math.max(0, textSet.shadowSize * sizeMultiplier)
-          drawWithLetterSpacing((ch, x) => ctx.fillText(ch, x, 0))
-          ctx.restore()
+          octx.save()
+          octx.shadowColor = textSet.shadowColor
+          octx.shadowBlur = Math.max(0, textSet.shadowSize * sizeMultiplier)
+          drawWithLetterSpacing((ch, x) => octx.fillText(ch, x, 0))
+          octx.restore()
         }
-
         if (textSet.strokeWidth > 0) {
-          ctx.save()
-          ctx.lineWidth = Math.max(1, textSet.strokeWidth * sizeMultiplier)
-          ctx.strokeStyle = textSet.strokeColor
-          ctx.miterLimit = 2
-          drawWithLetterSpacing((ch, x) => ctx.strokeText(ch, x, 0))
-          ctx.restore()
+          octx.save()
+          octx.lineWidth = Math.max(1, textSet.strokeWidth * sizeMultiplier)
+          octx.strokeStyle = textSet.strokeColor
+          octx.miterLimit = 2
+          drawWithLetterSpacing((ch, x) => octx.strokeText(ch, x, 0))
+          octx.restore()
         }
+        drawWithLetterSpacing((ch, x) => octx.fillText(ch, x, 0))
+        octx.restore()
 
-        drawWithLetterSpacing((ch, x) => ctx.fillText(ch, x, 0))
-        ctx.restore()
+        const blendMap: Record<string, GlobalCompositeOperation> = {
+          normal: 'source-over',
+          multiply: 'multiply',
+          screen: 'screen',
+          overlay: 'overlay',
+          darken: 'darken',
+          lighten: 'lighten',
+          difference: 'difference',
+          exclusion: 'exclusion',
+        } as any
+        const prevComposite = ctx.globalCompositeOperation
+        ctx.globalCompositeOperation = (blendMap as any)[textSet.blendMode || 'normal'] ?? 'source-over'
+        ctx.drawImage(off, 0, 0)
         ctx.globalCompositeOperation = prevComposite
       })
 
@@ -338,47 +331,29 @@ const InlineEditor = () => {
           ctx.filter = 'none'
           ctx.drawImage(removedBgImg, 0, 0, canvas.width, canvas.height)
           
-          // Render front layer text after removed background
+          // Render front layer text after removed background (offscreen isolation)
           textSets.filter(set => set.layer === 'front').forEach((textSet) => {
-            ctx.save()
+            const off = document.createElement('canvas')
+            off.width = canvas.width
+            off.height = canvas.height
+            const octx = off.getContext('2d')
+            if (!octx) return
 
             const fontPx = Math.max(1, textSet.fontSize * sizeMultiplier)
-            ctx.font = `${textSet.fontWeight} ${fontPx}px ${textSet.fontFamily}`
-            ctx.fillStyle = textSet.color
-            ctx.globalAlpha = textSet.opacity
+            octx.font = `${textSet.fontWeight} ${fontPx}px ${textSet.fontFamily}`
+            octx.fillStyle = textSet.color
+            octx.globalAlpha = textSet.opacity
+            octx.textAlign = 'center'
+            octx.textBaseline = 'middle'
 
-            const blendMap: Record<string, GlobalCompositeOperation> = {
-              normal: 'source-over',
-              multiply: 'multiply',
-              screen: 'screen',
-              overlay: 'overlay',
-              darken: 'darken',
-              lighten: 'lighten',
-              'color-dodge': 'color-dodge',
-              'color-burn': 'color-burn',
-              'hard-light': 'hard-light',
-              'soft-light': 'soft-light',
-              difference: 'difference',
-              exclusion: 'exclusion',
-              hue: 'hue',
-              saturation: 'saturation',
-              color: 'color',
-              luminosity: 'luminosity',
-            } as any
-            const prevComposite = ctx.globalCompositeOperation
-            ctx.globalCompositeOperation = (blendMap as any)[textSet.blendMode || 'normal'] ?? 'source-over'
-            ctx.textAlign = 'center'
-            ctx.textBaseline = 'middle'
+            const x = (off.width * (textSet.left + 50)) / 100
+            const y = (off.height * (50 - textSet.top)) / 100
 
-            const x = (canvas.width * (textSet.left + 50)) / 100
-            const y = (canvas.height * (50 - textSet.top)) / 100
-
-            ctx.translate(x, y)
-
+            octx.save()
+            octx.translate(x, y)
             const tiltXRad = (-textSet.tiltX * Math.PI) / 180
             const tiltYRad = (-textSet.tiltY * Math.PI) / 180
-
-            ctx.transform(
+            octx.transform(
               Math.cos(tiltYRad) * (textSet.scaleX ?? 1),
               Math.sin(0),
               -Math.sin(0),
@@ -386,8 +361,7 @@ const InlineEditor = () => {
               0,
               0
             )
-
-            ctx.rotate((textSet.rotation * Math.PI) / 180)
+            octx.rotate((textSet.rotation * Math.PI) / 180)
 
             const letterSpacingPx = (textSet.letterSpacing || 0) * sizeMultiplier
             const drawWithLetterSpacing = (draw: (ch: string, x: number) => void) => {
@@ -398,36 +372,48 @@ const InlineEditor = () => {
               const chars = textSet.text.split('')
               let currentX = 0
               const totalWidth = chars.reduce((width, char, i) => {
-                const charWidth = ctx.measureText(char).width
+                const charWidth = octx.measureText(char).width
                 return width + charWidth + (i < chars.length - 1 ? letterSpacingPx : 0)
               }, 0)
               currentX = -totalWidth / 2
               chars.forEach((char) => {
-                const charWidth = ctx.measureText(char).width
+                const charWidth = octx.measureText(char).width
                 draw(char, currentX + charWidth / 2)
                 currentX += charWidth + letterSpacingPx
               })
             }
 
             if (textSet.shadowSize > 0) {
-              ctx.save()
-              ctx.shadowColor = textSet.shadowColor
-              ctx.shadowBlur = Math.max(0, textSet.shadowSize * sizeMultiplier)
-              drawWithLetterSpacing((ch, x) => ctx.fillText(ch, x, 0))
-              ctx.restore()
+              octx.save()
+              octx.shadowColor = textSet.shadowColor
+              octx.shadowBlur = Math.max(0, textSet.shadowSize * sizeMultiplier)
+              drawWithLetterSpacing((ch, x) => octx.fillText(ch, x, 0))
+              octx.restore()
             }
-
             if (textSet.strokeWidth > 0) {
-              ctx.save()
-              ctx.lineWidth = Math.max(1, textSet.strokeWidth * sizeMultiplier)
-              ctx.strokeStyle = textSet.strokeColor
-              ctx.miterLimit = 2
-              drawWithLetterSpacing((ch, x) => ctx.strokeText(ch, x, 0))
-              ctx.restore()
+              octx.save()
+              octx.lineWidth = Math.max(1, textSet.strokeWidth * sizeMultiplier)
+              octx.strokeStyle = textSet.strokeColor
+              octx.miterLimit = 2
+              drawWithLetterSpacing((ch, x) => octx.strokeText(ch, x, 0))
+              octx.restore()
             }
+            drawWithLetterSpacing((ch, x) => octx.fillText(ch, x, 0))
+            octx.restore()
 
-            drawWithLetterSpacing((ch, x) => ctx.fillText(ch, x, 0))
-            ctx.restore()
+            const blendMap: Record<string, GlobalCompositeOperation> = {
+              normal: 'source-over',
+              multiply: 'multiply',
+              screen: 'screen',
+              overlay: 'overlay',
+              darken: 'darken',
+              lighten: 'lighten',
+              difference: 'difference',
+              exclusion: 'exclusion',
+            } as any
+            const prevComposite = ctx.globalCompositeOperation
+            ctx.globalCompositeOperation = (blendMap as any)[textSet.blendMode || 'normal'] ?? 'source-over'
+            ctx.drawImage(off, 0, 0)
             ctx.globalCompositeOperation = prevComposite
           })
           
