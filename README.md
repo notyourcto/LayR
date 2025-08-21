@@ -53,7 +53,7 @@ The app now performs heavy background removal on a separate server:
 <hr>
 Environment Variables
 
-Create `.env.local` for local dev and set in Vercel (Preview + Production):
+Create `.env.local` for local dev:
 
 ```
 NEXT_PUBLIC_CLOUD_RUN_URL=https://<your-cloud-run-service>.a.run.app
