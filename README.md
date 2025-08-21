@@ -3,7 +3,6 @@ LayR (Fork of Text-Behind-Image)
   <img src="https://github.com/user-attachments/assets/d8b08a49-faea-4cbe-af57-59537ac0ced0" width="400" />
   <img src="https://github.com/user-attachments/assets/5958247d-ab69-4b31-9ef5-caf7c0d6b2ad" width="400" />
 </p>
-<hr>
 
 LayR is a free and open-source tool for creating text-behind-image designs, with additional editing features.
 This project is a modified fork of Text Behind Image
