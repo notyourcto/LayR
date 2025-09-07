@@ -117,8 +117,8 @@ const Page = () => {
                     <div className='rounded-2xl border p-4 bg-white/70 dark:bg-zinc-900/40 backdrop-blur'>
                         <div className='font-medium text-foreground mb-2'>Connect</div>
                         <div className='flex items-center gap-4'>
-                            <Link href={'https://www.instagram.com/notyourcfo'} target="_blank" rel="noopener noreferrer" className='underline underline-offset-4'>Instagram</Link>
-                            <Link href={'https://x.com/notyourcfo'} target="_blank" rel="noopener noreferrer" className='underline underline-offset-4'>Twitter/X</Link>
+                            <Link href={'https://www.instagram.com/notyourcto'} target="_blank" rel="noopener noreferrer" className='underline underline-offset-4'>Instagram</Link>
+                            <Link href={'https://x.com/notyourcto'} target="_blank" rel="noopener noreferrer" className='underline underline-offset-4'>Twitter/X</Link>
                         </div>
                     </div>
                 </div>
